@@ -747,19 +747,39 @@ public class QuorumPeerConfig {
             return;
         }
         QuorumServer qs = quorumVerifier.getAllMembers().get(serverId);
-        if (clientPortAddress != null && qs != null && qs.clientAddr != null) {
-            if ((!clientPortAddress.getAddress().isAnyLocalAddress() && !clientPortAddress.equals(qs.clientAddr)) || (
-                clientPortAddress.getAddress().isAnyLocalAddress()
-                && clientPortAddress.getPort() != qs.clientAddr.getPort())) {
-                throw new ConfigException("client address for this server (id = " + serverId
-                                          + ") in static config file is " + clientPortAddress
-                                          + " is different from client address found in dynamic file: " + qs.clientAddr);
+        if (qs == null) {
+            return;
+        }
+
+        if (qs.clientAddr != null) {
+            // if both clientPortAddress and secureClientPortAddress are not set in static config,
+            // then use address from dynamic config as clientPortAddress
+            if (clientPortAddress == null && secureClientPortAddress == null) {
+                clientPortAddress = qs.clientAddr;
             }
-        }
-        if (qs != null && qs.clientAddr != null) {
-            clientPortAddress = qs.clientAddr;
-        }
-        if (qs != null && qs.clientAddr == null) {
+
+            // If clientPortAddress is set in static config (could be in addition to secureClientPortAddress), then
+            // verify clientPortAddress matches the client address in dynamic config.
+            else if (clientPortAddress != null){
+                if ((!clientPortAddress.getAddress().isAnyLocalAddress() && !clientPortAddress.equals(qs.clientAddr)) || (
+                    clientPortAddress.getAddress().isAnyLocalAddress() && clientPortAddress.getPort() != qs.clientAddr.getPort())) {
+                    throw new ConfigException("client address for this server (id = " + serverId
+                        + ") in static config file is " + clientPortAddress
+                        + " and is different from client address found in dynamic file: " + qs.clientAddr);
+                }
+            }
+
+            // If "only" secureClientPortAddress is set in static config, then verify it matches the
+            // client address in dynamic config. This means, we want a TLS-only client port.
+            else if (secureClientPortAddress != null) {
+                if ((!secureClientPortAddress.getAddress().isAnyLocalAddress() && !secureClientPortAddress.equals(qs.clientAddr)) || (
+                    secureClientPortAddress.getAddress().isAnyLocalAddress() && secureClientPortAddress.getPort() != qs.clientAddr.getPort())) {
+                    throw new ConfigException("secure client address for this server (id = " + serverId
+                        + ") in static config file is " + secureClientPortAddress
+                        + " and is different from client address found in dynamic file: " + qs.clientAddr);
+                }
+            }
+        } else {
             qs.clientAddr = clientPortAddress;
             qs.isClientAddrFromStatic = true;
         }
